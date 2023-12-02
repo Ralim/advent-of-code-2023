@@ -9,6 +9,12 @@ struct WithdrawnSet {
     blue: u32,
 }
 
+impl WithdrawnSet {
+    pub fn get_power(&self) -> u32 {
+        self.red * self.blue * self.green
+    }
+}
+
 #[derive(Debug)]
 struct GameRecord {
     game_id: u32,
@@ -104,10 +110,12 @@ fn read_file_lines_to_possible_games(filename: &str) -> Vec<u32> {
         let sum = game.get_max_seen();
 
         println!("Game -> {:?} = {:?}", game.game_id, sum);
-        if sum.red <= max_red && sum.green <= max_green && sum.blue <= max_blue {
-            result.push(game.game_id);
-            println!("Counted");
-        }
+        // if sum.red <= max_red && sum.green <= max_green && sum.blue <= max_blue {
+        //  result.push(game.game_id);
+        // }
+        //Swap comment for A/B
+        result.push(sum.get_power());
+        println!("Counted");
     }
     result
 }
