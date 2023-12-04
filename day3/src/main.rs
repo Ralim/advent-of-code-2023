@@ -69,6 +69,9 @@ impl SymbolObject {
     pub fn get_symbol(&self) -> &str {
         &self.symbol
     }
+    pub fn is_gear(&self) -> bool {
+        return self.get_symbol() == "*";
+    }
 }
 
 impl BoundedObject for SymbolObject {
@@ -176,6 +179,35 @@ impl Schematic {
 
         selected_numbers.into_iter().collect()
     }
+
+    pub fn select_gears(&self) -> Vec<u32> {
+        let mut gear_ratios = Vec::new();
+
+        for symbol in &self.symbols {
+            if !symbol.is_gear() {
+                continue;
+            }
+            //Filter criteria is that a number is valid iff it shares an edge to a symbol (diagonals count)
+            // This means we can take the 3x3 bound of the symbol; if that intersects the number; its in
+            let check_hit_boxes = self.get_bound_set(symbol);
+            println!("Symbol {:?} Bounds -> {:?}", symbol, check_hit_boxes);
+            let mut nearby_numbers = Vec::new();
+            for number in &self.numbers {
+                for (x, y) in &check_hit_boxes {
+                    if number.contains_coord(*x, *y) {
+                        nearby_numbers.push(number);
+                        break;
+                    }
+                }
+            }
+            if nearby_numbers.len() == 2 {
+                let ratio = nearby_numbers[0].get_value() * nearby_numbers[1].get_value();
+                gear_ratios.push(ratio)
+            }
+        }
+
+        gear_ratios
+    }
 }
 impl Default for Schematic {
     fn default() -> Self {
@@ -208,4 +240,12 @@ fn main() {
         sum += symbol.get_value()
     }
     println!("Total sum {}", sum);
+
+    let gear_ratios = schematic.select_gears();
+
+    sum = 0;
+    for ratio in gear_ratios {
+        sum += ratio;
+    }
+    println!("Total gear sum {}", sum);
 }
