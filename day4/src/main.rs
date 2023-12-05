@@ -2,7 +2,7 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use std::{collections::HashSet, fs::read_to_string};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct GameRecord {
     card_number: u32,
     winners: HashSet<u32>,
@@ -18,17 +18,6 @@ impl GameRecord {
             }
         }
         res
-    }
-    pub fn get_game_score(&self) -> u32 {
-        let matching_numbers = self.get_matching_numbers();
-        if matching_numbers.len() == 0 {
-            return 0;
-        }
-        let mut score = 1;
-        for _ in 1..matching_numbers.len() {
-            score *= 2;
-        }
-        return score;
     }
 }
 
@@ -66,22 +55,32 @@ fn parse_card_line(chunk: &str) -> GameRecord {
         drawn,
     }
 }
-
-fn read_file_to_cards(filename: &str) -> Vec<u32> {
+fn collect_games(games: &[GameRecord], start_index: usize) -> Vec<GameRecord> {
+    let mut res = Vec::new();
+    let matched_numbers = games[start_index].get_matching_numbers().len();
+    res.push(games[start_index].clone());
+    for index_offset in 1..matched_numbers+1 {
+        res.extend(collect_games(games, start_index + index_offset));
+    }
+    res
+}
+fn read_file_to_cards(filename: &str) -> usize {
+    let mut games = Vec::new();
     let mut result = Vec::new();
     for line in read_to_string(filename).unwrap().lines() {
         let game = parse_card_line(line);
-        result.push(game.get_game_score());
-        println!("Counted");
+        games.push(game);
     }
-    result
+    // Walk all games, find out how many numbers matched, add that many games to total
+    for i in 0..games.len() {
+        result.extend(collect_games(&games, i));
+    }
+    // println!("{:?}", result);
+    result.len()
 }
 
 fn main() {
     let line_results = read_file_to_cards("input");
-    let mut sum = 0;
-    for v in line_results {
-        sum += v;
-    }
-    println!("Total {}", sum);
+
+    println!("Total {}", line_results);
 }
