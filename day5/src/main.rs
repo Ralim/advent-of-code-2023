@@ -71,7 +71,21 @@ fn string_to_split_nums(chunk_in: &str) -> Vec<u64> {
     }
     res
 }
-
+fn find_lowest_location(rangers: &[RangeSet], seeds: &[u64]) -> u64 {
+    let mut lowest_location = 0xFFFFFFFF;
+    for seed_pair in seeds.chunks(2) {
+        for seed in seed_pair[0]..seed_pair[0] + seed_pair[1] {
+            let mut current_value = seed;
+            for stage in rangers {
+                current_value = stage.lookup(current_value);
+            }
+            if current_value < lowest_location {
+                lowest_location = current_value;
+            }
+        }
+    }
+    lowest_location
+}
 fn read_file(filename: &str) -> u64 {
     let mut rangers: Vec<RangeSet> = Vec::new();
     let mut seeds = Vec::new();
@@ -100,20 +114,7 @@ fn read_file(filename: &str) -> u64 {
 
     // We now have all of our rangers; we now need to lookup each seed through the ranges
     //For part 2, these are run-length encoded
-
-    let mut lowest_location = 0xFFFFFFFF;
-    for seed_pair in seeds.chunks(2) {
-        for seed in seed_pair[0]..seed_pair[0] + seed_pair[1] {
-            let mut current_value = seed;
-            for stage in &rangers {
-                current_value = stage.lookup(current_value);
-            }
-            if current_value < lowest_location {
-                lowest_location = current_value;
-            }
-        }
-    }
-    lowest_location
+    find_lowest_location(&rangers, &seeds)
 }
 
 fn main() {
@@ -121,3 +122,5 @@ fn main() {
 
     println!("Total {}", line_results);
 }
+
+//Part B -> 81956384
