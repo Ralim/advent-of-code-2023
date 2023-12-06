@@ -50,7 +50,7 @@ fn read_file(filename: &str) -> u64 {
     let mut possible_win_combos = 1;
     for race in races {
         let winning_holds = race.get_winning_button_times();
-        println!("Race Winners {:?}", winning_holds);
+        // println!("Race Winners {:?}", winning_holds);
         possible_win_combos *= winning_holds.len();
     }
     possible_win_combos as u64
