@@ -38,6 +38,7 @@ impl PartialOrd for CardType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Hand {
     pub card_set: Vec<char>,
+    pub og_card_set: Vec<char>,
     distinct_cards: HashSet<char>,
     value: u64,
 }
@@ -46,6 +47,7 @@ impl Hand {
         let chars: Vec<char> = hand.chars().collect();
 
         Self {
+            og_card_set: chars.clone(),
             card_set: chars.clone(),
             value: value.parse().unwrap(),
             distinct_cards: HashSet::from_iter(chars.iter().cloned()),
@@ -62,6 +64,35 @@ impl Hand {
             }
         }
         count
+    }
+    pub fn promote_joker(&mut self) {
+        if !self.distinct_cards.contains(&'J') {
+            return;
+        }
+        //Promote J
+        let mut most_common_char = *self.card_set.first().unwrap();
+        let mut most_common_count = 0;
+        for c in &self.distinct_cards {
+            if c != &'J' {
+                let count = self.card_set.iter().filter(|&n| n == c).count();
+                if count > most_common_count {
+                    most_common_count = count;
+                    most_common_char = *c;
+                }
+            }
+        }
+        // println!(
+        //     "Replacing J {:?} -> {:?} [{:?}]",
+        //     self.card_set, most_common_char, self.distinct_cards
+        // );
+        if self.distinct_cards.len() > 1 {
+            self.distinct_cards.remove(&'J');
+        }
+        for i in 0..self.card_set.len() {
+            if self.card_set[i] == 'J' {
+                self.card_set[i] = most_common_char;
+            }
+        }
     }
     pub fn get_type(&self) -> CardType {
         if self.distinct_cards.len() == 1 {
@@ -115,7 +146,7 @@ impl Ord for Hand {
             return self_type.cmp(&other_type);
         }
         //if its the same type then we walk the chars in order
-        for (c1, c2) in self.card_set.iter().zip(other.card_set.iter()) {
+        for (c1, c2) in self.og_card_set.iter().zip(other.og_card_set.iter()) {
             if c1 != c2 {
                 return card_to_virtual_rank(c1).cmp(&card_to_virtual_rank(c2));
             }
@@ -134,16 +165,16 @@ fn card_to_virtual_rank(a: &char) -> usize {
         'A' => 13,
         'K' => 12,
         'Q' => 11,
-        'J' => 10,
-        'T' => 9,
-        '9' => 8,
-        '8' => 7,
-        '7' => 6,
-        '6' => 5,
-        '5' => 4,
-        '4' => 3,
-        '3' => 2,
-        '2' => 1,
+        'T' => 10,
+        '9' => 9,
+        '8' => 8,
+        '7' => 7,
+        '6' => 6,
+        '5' => 5,
+        '4' => 4,
+        '3' => 3,
+        '2' => 2,
+        'J' => 1,
         _ => panic!("Unhandled card {}", a),
     }
 }
@@ -154,7 +185,9 @@ fn read_file(filename: &str) -> u64 {
     let lines: Vec<&str> = file_contents.lines().collect();
     for line in lines {
         let sp: Vec<&str> = line.split(' ').collect();
-        hands.push(Hand::make(sp[0], sp[1]));
+        let mut hand = Hand::make(sp[0], sp[1]);
+        hand.promote_joker();
+        hands.push(hand);
     }
     //Sort hands lowest to highest
     hands.sort();
