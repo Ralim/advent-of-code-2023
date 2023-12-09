@@ -6,3 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+
+
+[profile.release]
+lto = "fat"
+# Build with RUSTFLAGS="-C target-cpu=native" for more speed
+opt-level = 3
