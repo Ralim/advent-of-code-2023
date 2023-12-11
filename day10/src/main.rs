@@ -1,4 +1,4 @@
-use std::fs::read_to_string;
+use std::{collections::HashSet, fs::read_to_string};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PipeDirection {
@@ -29,6 +29,7 @@ impl PipeDirection {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct PipeCell {
     pub directions: [PipeDirection; 2],
+    pub symbol: char,
 }
 
 impl PipeCell {
@@ -42,11 +43,16 @@ impl PipeCell {
             'F' => [PipeDirection::East, PipeDirection::South],
             _ => panic!("Invalid pipe {}", value),
         };
-        Self { directions }
+        Self {
+            directions,
+            symbol: *value,
+        }
     }
+
     pub fn from_dirs(directions: &[PipeDirection]) -> Self {
         Self {
             directions: [directions[0], directions[1]],
+            symbol: 'S', // lazy hack
         }
     }
     pub fn connects(&self, dir: PipeDirection) -> bool {
@@ -60,8 +66,15 @@ impl PipeCell {
         }
     }
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct GridPoint {
+    pub x: usize,
+    pub y: usize,
+}
 struct PipeGrid {
     grid: Vec<Vec<Option<PipeCell>>>,
+    part_of_path: HashSet<GridPoint>,
+
     start_x: usize,
     start_y: usize,
 }
@@ -130,31 +143,77 @@ impl PipeGrid {
 
         Self {
             grid,
+            part_of_path: HashSet::new(),
             start_x: cursor_x,
             start_y: cursor_y,
         }
     }
     pub fn get_loop_len(&mut self) -> usize {
         //Starting at S, follow pipes until we get to the start
-
         let mut cursor_x = self.start_x;
         let mut cursor_y = self.start_y;
+        self.part_of_path.insert(GridPoint {
+            x: cursor_x,
+            y: cursor_y,
+        });
 
         let mut direction = self.grid[cursor_x][cursor_y].unwrap().directions[0];
         (cursor_x, cursor_y) = direction.move_cursor(cursor_x, cursor_y);
 
         let mut steps = 1;
         while cursor_x != self.start_x || cursor_y != self.start_y {
+            self.part_of_path.insert(GridPoint {
+                x: cursor_x,
+                y: cursor_y,
+            });
             let cell = self.grid[cursor_x][cursor_y];
-            println!(
-                "Step {},{} -> {:?} -> {:?}",
-                cursor_x, cursor_y, direction, cell
-            );
+            // println!(
+            //     "Step {},{} -> {:?} -> {:?}",
+            //     cursor_x, cursor_y, direction, cell
+            // );
             direction = cell.unwrap().get_next_dir(direction.flip());
             (cursor_x, cursor_y) = direction.move_cursor(cursor_x, cursor_y);
             steps += 1;
         }
         steps
+    }
+    pub fn count_enclosed_nones(&mut self) {
+        let mut sum = 0;
+        for (x, row) in self.grid.iter().enumerate() {
+            let mut row_print = "".to_owned();
+
+            for (y, col) in row.iter().enumerate() {
+                let is_path_sample = self.part_of_path.contains(&GridPoint { x: x, y: y });
+                if col.is_none() || !is_path_sample {
+                    //Empty ground
+                    //Count number of edges met from this point outwards on an angle that doesn't collide with edges
+                    let mut edges_crossed = 0;
+                    let mut x2 = x;
+                    let mut y2 = y;
+                    while x2 < self.grid.len() && y2 < row.len() {
+                        let sample = self.grid[x2][y2];
+                        let is_in_path = self.part_of_path.contains(&GridPoint { x: x2, y: y2 });
+                        if is_in_path {
+                            if sample.is_some_and(|s| !(s.symbol == 'L' || s.symbol == '7')) {
+                                edges_crossed += 1;
+                            }
+                        }
+                        x2 += 1;
+                        y2 += 1;
+                    }
+                    if edges_crossed % 2 == 1 {
+                        row_print += "I";
+                        sum += 1;
+                    } else {
+                        row_print += "O";
+                    }
+                } else {
+                    row_print += &col.unwrap().symbol.to_string();
+                }
+            }
+            println!("Row -> {}", row_print);
+        }
+        println!("Total inside {}", sum);
     }
 }
 
@@ -162,8 +221,10 @@ fn read_file(filename: &str) -> usize {
     let file_contents = read_to_string(filename).unwrap();
     let lines: Vec<&str> = file_contents.lines().collect();
     let mut grid = PipeGrid::from_lines(&lines);
-    println!("Grid {:?}", grid.grid);
-    grid.get_loop_len() / 2
+
+    let loop_len = grid.get_loop_len();
+    grid.count_enclosed_nones();
+    loop_len / 2
 }
 
 fn main() {
