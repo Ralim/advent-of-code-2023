@@ -12,8 +12,8 @@ impl GridPoint {
         let mut row_error: isize = isize::abs((b.row) - (self.row));
         let mut col_error: isize = isize::abs((b.col) - (self.col));
 
-        row_error += (num_row_gap * (2 - 1)) as isize;
-        col_error += (num_col_gap * (2 - 1)) as isize;
+        row_error += (num_row_gap * (1000000 - 1)) as isize;
+        col_error += (num_col_gap * (1000000 - 1)) as isize;
 
         isize::abs(row_error) + isize::abs(col_error)
     }
