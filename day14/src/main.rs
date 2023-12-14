@@ -1,5 +1,9 @@
-use rayon::prelude::*;
-use std::{collections::VecDeque, fs::read_to_string};
+use jemallocator::Jemalloc;
+
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
+
+use std::fs::read_to_string;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 
@@ -41,40 +45,52 @@ impl VerticalStripe {
         println!();
     }
     pub fn move_round_rocks_up(&mut self) {
-        let queue = VecDeque::from_iter(self.rock_set.iter().cloned());
-        self.rock_set.clear();
+        let mut dirt_start = 0xFFFF;
 
-        let mut push_back = VecDeque::with_capacity(10);
-        for value in queue {
-            match value {
+        for i in 0..self.rock_set.len() {
+            match self.rock_set[i] {
                 GroundState::SquareRock => {
-                    //Cant be moved, so have to flush queue then insert
-                    self.rock_set.extend(push_back.iter());
-                    push_back.clear();
-                    self.rock_set.push(value);
+                    //Cant be moved, so have to flush queued dirt then insert
+                    if dirt_start != 0xFFFF {
+                        for x in dirt_start..i {
+                            self.rock_set[x] = GroundState::Dirt
+                        }
+                        dirt_start = 0xFFFF;
+                    }
                 }
                 GroundState::RoundRock => {
-                    self.rock_set.push(value);
+                    if dirt_start == 0xFFFF {
+                        //Cant move, leave in place
+                    } else {
+                        self.rock_set[dirt_start] = GroundState::RoundRock;
+                        dirt_start += 1;
+                    }
                 }
                 GroundState::Dirt => {
-                    push_back.push_back(value);
+                    if dirt_start == 0xFFFF {
+                        dirt_start = i;
+                    }
                 }
             }
         }
-        self.rock_set.extend(push_back);
+        if dirt_start != 0xFFFF {
+            for x in dirt_start..self.rock_set.len() {
+                self.rock_set[x] = GroundState::Dirt
+            }
+        }
     }
     pub fn get_north_weight(&self) -> usize {
         let mut sum = 0;
         for (i, v) in self.rock_set.iter().enumerate() {
             if *v == GroundState::RoundRock {
-                sum += (self.rock_set.len() - i);
+                sum += self.rock_set.len() - i;
             }
         }
         sum
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct Grid {
     stripes: Vec<VerticalStripe>,
 }
@@ -99,29 +115,55 @@ impl Grid {
 
     pub fn print(&self) {
         println!("<------");
-        for m in &self.stripes {
+        for m in self.stripes.iter().rev() {
             m.print();
         }
         println!("<------");
     }
     pub fn slide_all_rocks_up(&mut self) {
-        for x in self.stripes.iter_mut() {
-            x.move_round_rocks_up();
-        }
+        self.stripes
+            .iter_mut()
+            .for_each(|x| x.move_round_rocks_up());
     }
     pub fn get_north_weight(&self) -> usize {
         self.stripes.iter().map(|x| x.get_north_weight()).sum()
     }
-}
+    pub fn get_rotated_cw(&mut self) {
+        let mut stripes = Vec::with_capacity(self.stripes[0].rock_set.len());
 
+        for _ in 0..self.stripes[0].rock_set.len() {
+            stripes.push(VerticalStripe::default());
+        }
+
+        for stripe in &self.stripes {
+            for (i, v) in stripe.rock_set.iter().rev().enumerate() {
+                stripes[i].rock_set.push(*v);
+            }
+        }
+        self.stripes = stripes;
+    }
+}
+fn rotate_one_iter(grid: &mut Grid) {
+    grid.slide_all_rocks_up();
+    grid.get_rotated_cw();
+    grid.slide_all_rocks_up();
+    grid.get_rotated_cw();
+    grid.slide_all_rocks_up();
+    grid.get_rotated_cw();
+    grid.slide_all_rocks_up();
+    grid.get_rotated_cw()
+}
 fn read_file(filename: &str) -> usize {
     let file_contents = read_to_string(filename).unwrap();
     let lines: Vec<&str> = file_contents.lines().collect();
     let mut grid: Grid = Grid::from_lines(&lines);
     grid.print();
-
-    grid.slide_all_rocks_up();
-    grid.print();
+    for i in 0..1_000_000_000 {
+        rotate_one_iter(&mut grid);
+        if i % 1_000_000 == 0 {
+            println!("i {}", i);
+        }
+    }
     grid.get_north_weight()
 }
 
