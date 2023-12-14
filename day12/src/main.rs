@@ -16,6 +16,18 @@ struct SpringLine {
 }
 
 impl SpringLine {
+    pub fn expand_part_2(&mut self) {
+        // To unfold the records, on each row,
+        // replace the list of spring conditions with five copies of itself (separated by ?)
+        // and replace the list of contiguous groups of damaged springs with five copies of itself (separated by ,).
+
+        let base = self.clone();
+        for _ in 0..4 {
+            self.spring_state.push(SpringState::Unknown);
+            self.spring_state.extend_from_slice(&base.spring_state);
+            self.outage_set.extend_from_slice(&base.outage_set);
+        }
+    }
     pub fn is_complete(&self) -> bool {
         self.spring_state
             .iter()
@@ -23,38 +35,57 @@ impl SpringLine {
             .count()
             == 0
     }
-    pub fn is_valid(&self) -> bool {
+    pub fn is_valid_until_unknown(&self, check_len: bool) -> bool {
         //So we count the sequence of broken springs, this should match the outage set
-        let mut counted_outages: Vec<usize> = Vec::new();
+        let mut counted_outages: Vec<usize> = Vec::with_capacity(self.outage_set.len());
         let mut counter = 0;
         for state in &self.spring_state {
             if *state == SpringState::Working {
                 if counter > 0 {
+                    if (counted_outages.len() + 1) > self.outage_set.len() {
+                        return false;
+                    }
                     counted_outages.push(counter);
                     counter = 0;
                 }
             } else if *state == SpringState::Broken {
                 counter += 1;
+            } else {
+                //Hit an unknown, stop here
+                counter = 0;
+                break;
             }
         }
         if counter > 0 {
             counted_outages.push(counter);
         }
-        // println!(
-        //     "Row {:?} -> {:?} | {:?}",
-        //     self.spring_state, self.outage_set, counted_outages
-        // );
 
-        counted_outages == self.outage_set
+        // over length so immediately wrong
+        if counted_outages.len() > self.outage_set.len() {
+            return false;
+        }
+
+        for index in 0..counted_outages.len() {
+            if counted_outages[index] != self.outage_set[index] {
+                return false;
+            }
+        }
+        if check_len {
+            return counted_outages.len() == self.outage_set.len();
+        }
+        true
     }
 
     pub fn count_possible_solutions(&self) -> usize {
         // Find the first unknown, and fork it out
+        if !self.is_valid_until_unknown(false) {
+            return 0;
+        }
         if self.is_complete() {
-            if !self.is_valid() {
-                return 0;
+            if self.is_valid_until_unknown(true) {
+                return 1;
             }
-            return 1;
+            return 0;
         }
         //Fork/split and sum
         let index = self
@@ -102,17 +133,18 @@ impl SpringGrid {
                 }
             }
             line.outage_set = splits[1].split(',').map(|s| s.parse().unwrap()).collect();
-
+            line.expand_part_2();
             spring_sets.push(line);
         }
 
         Self { spring_sets }
     }
     pub fn get_total_solutions(&self) -> usize {
-        let par_iter = self
-            .spring_sets
-            .par_iter()
-            .map(|x| x.count_possible_solutions());
+        let par_iter = self.spring_sets.par_iter().map(|x| {
+            let res = x.count_possible_solutions();
+            println!("Line -> {}", res);
+            res
+        });
 
         par_iter.sum()
     }
