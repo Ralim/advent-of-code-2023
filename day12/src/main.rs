@@ -1,5 +1,9 @@
+use jemallocator::Jemalloc;
 use rayon::prelude::*;
-use std::fs::read_to_string;
+use std::{fs::read_to_string, time::Instant};
+
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 
@@ -13,6 +17,33 @@ enum SpringState {
 struct SpringLine {
     pub spring_state: Vec<SpringState>,
     pub outage_set: Vec<usize>,
+}
+fn count_outages(set: &Vec<SpringState>, counted_outages: &mut Vec<usize>, max_len: usize) {
+    counted_outages.clear();
+    let mut counter = 0;
+    for state in set {
+        match *state {
+            SpringState::Unknown => {
+                counter = 0;
+                break;
+            }
+            SpringState::Working => {
+                if counter > 0 {
+                    if (counted_outages.len() + 1) > max_len {
+                        return;
+                    }
+                    counted_outages.push(counter);
+                    counter = 0;
+                }
+            }
+            SpringState::Broken => {
+                counter += 1;
+            }
+        }
+    }
+    if counter > 0 {
+        counted_outages.push(counter);
+    }
 }
 
 impl SpringLine {
@@ -28,77 +59,52 @@ impl SpringLine {
             self.outage_set.extend_from_slice(&base.outage_set);
         }
     }
-    pub fn is_complete(&self) -> bool {
-        self.spring_state
-            .iter()
-            .filter(|p| **p == SpringState::Unknown)
-            .count()
-            == 0
-    }
-    pub fn is_valid_until_unknown(&self, check_len: bool) -> bool {
-        //So we count the sequence of broken springs, this should match the outage set
-        let mut counted_outages: Vec<usize> = Vec::with_capacity(self.outage_set.len());
-        let mut counter = 0;
-        for state in &self.spring_state {
-            if *state == SpringState::Working {
-                if counter > 0 {
-                    if (counted_outages.len() + 1) > self.outage_set.len() {
-                        return false;
-                    }
-                    counted_outages.push(counter);
-                    counter = 0;
-                }
-            } else if *state == SpringState::Broken {
-                counter += 1;
-            } else {
-                //Hit an unknown, stop here
-                counter = 0;
-                break;
-            }
-        }
-        if counter > 0 {
-            counted_outages.push(counter);
-        }
 
+    pub fn is_valid_until_unknown(&self, counted_outages: &mut Vec<usize>) -> (bool, bool) {
+        //So we count the sequence of broken springs, this should match the outage set
+
+        count_outages(&self.spring_state, counted_outages, self.outage_set.len());
         // over length so immediately wrong
         if counted_outages.len() > self.outage_set.len() {
-            return false;
+            return (false, false);
         }
 
-        for index in 0..counted_outages.len() {
-            if counted_outages[index] != self.outage_set[index] {
-                return false;
+        for (a, b) in (counted_outages.iter().zip(self.outage_set.iter())).rev() {
+            if *a != *b {
+                return (false, false);
             }
         }
-        if check_len {
-            return counted_outages.len() == self.outage_set.len();
-        }
-        true
+
+        (true, counted_outages.len() == self.outage_set.len())
     }
 
-    pub fn count_possible_solutions(&self) -> usize {
+    pub fn count_possible_solutions(&self, scratch: &mut Vec<usize>) -> usize {
         // Find the first unknown, and fork it out
-        if !self.is_valid_until_unknown(false) {
+        let (valid_fast, valid_full_check) = self.is_valid_until_unknown(scratch);
+        if !valid_fast {
             return 0;
         }
-        if self.is_complete() {
-            if self.is_valid_until_unknown(true) {
-                return 1;
-            }
-            return 0;
-        }
-        //Fork/split and sum
-        let index = self
+        let index_of_unknown = self
             .spring_state
             .iter()
-            .position(|r| *r == SpringState::Unknown)
-            .unwrap();
-        let mut working = self.clone();
-        let mut broken = self.clone();
-        working.spring_state[index] = SpringState::Working;
-        broken.spring_state[index] = SpringState::Broken;
+            .position(|r| *r == SpringState::Unknown);
 
-        working.count_possible_solutions() + broken.count_possible_solutions()
+        match index_of_unknown {
+            Some(index) => {
+                let mut working = self.clone();
+                let mut broken = self.clone();
+                working.spring_state[index] = SpringState::Working;
+                broken.spring_state[index] = SpringState::Broken;
+
+                working.count_possible_solutions(scratch) + broken.count_possible_solutions(scratch)
+            }
+            None => {
+                if valid_full_check {
+                    return 1;
+                }
+                return 0;
+            }
+        }
     }
 }
 impl Default for SpringLine {
@@ -141,8 +147,11 @@ impl SpringGrid {
     }
     pub fn get_total_solutions(&self) -> usize {
         let par_iter = self.spring_sets.par_iter().map(|x| {
-            let res = x.count_possible_solutions();
-            println!("Line -> {}", res);
+            let mut counted_outages: Vec<usize> = Vec::with_capacity(100);
+            let start = Instant::now();
+            let res = x.count_possible_solutions(&mut counted_outages);
+            let time = Instant::now().duration_since(start).as_millis() as f64;
+            println!("Line -> {} in {} seconds", res, time / 1000.0);
             res
         });
 
