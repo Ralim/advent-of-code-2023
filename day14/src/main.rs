@@ -1,5 +1,6 @@
 use array2d::Array2D;
 use jemallocator::Jemalloc;
+use memoize::memoize;
 
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
@@ -7,9 +8,10 @@ static GLOBAL: Jemalloc = Jemalloc;
 use std::{
     fmt::{self},
     fs::read_to_string,
+    time::Instant,
 };
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 
 enum GroundState {
     SquareRock,
@@ -26,7 +28,7 @@ impl fmt::Display for GroundState {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Hash, Eq)]
 struct Grid {
     grid: Array2D<GroundState>,
 }
@@ -66,8 +68,10 @@ impl Grid {
         }
         println!("<------");
     }
+
     pub fn slide_all_rocks_north(&mut self) {
         //Walk down each column, and slide rocks up
+
         for column in 0..self.grid.num_columns() {
             let mut dirt_start = 0xFFFF;
 
@@ -233,7 +237,9 @@ impl Grid {
         sum
     }
 }
-fn rotate_one_iter(grid: &mut Grid) {
+#[memoize(Capacity: 1_000_000)]
+
+fn rotate_one_iter(mut grid: Grid) -> Grid {
     grid.slide_all_rocks_north();
 
     grid.slide_all_rocks_west();
@@ -241,16 +247,24 @@ fn rotate_one_iter(grid: &mut Grid) {
     grid.slide_all_rocks_south();
 
     grid.slide_all_rocks_east();
+    grid
 }
+
 fn read_file(filename: &str) -> usize {
     let file_contents = read_to_string(filename).unwrap();
     let lines: Vec<&str> = file_contents.lines().collect();
     let mut grid: Grid = Grid::from_lines(&lines);
+    let mut last_iter = Instant::now();
     grid.print();
     for i in 0..1_000_000_000 {
-        rotate_one_iter(&mut grid);
+        grid = rotate_one_iter(grid);
         if i % 1_000_000 == 0 {
-            println!("i {}", i);
+            println!(
+                "i {} @ {} ms",
+                i,
+                Instant::now().duration_since(last_iter).as_millis()
+            );
+            last_iter = Instant::now();
         }
     }
     grid.get_north_weight()
