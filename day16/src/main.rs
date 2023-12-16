@@ -176,10 +176,15 @@ impl Grid {
             }
         }
     }
-    pub fn update_tile_activation(&mut self) {
+    pub fn update_tile_activation(
+        &mut self,
+        current_row: i64,
+        current_col: i64,
+        current_direction: Direction,
+    ) {
         //Starting in the top left, follow the beam right
         let mut history = HashSet::new();
-        self.follow_beam_update_counter(0, 0, Direction::East, &mut history);
+        self.follow_beam_update_counter(current_row, current_col, current_direction, &mut history);
     }
 }
 
@@ -199,12 +204,57 @@ impl Grid {
 fn read_file(filename: &str) -> i64 {
     let file_contents = read_to_string(filename).unwrap();
     let lines: Vec<&str> = file_contents.lines().collect();
-    let mut grid: Grid = Grid::from_lines(&lines);
+    let base_grid: Grid = Grid::from_lines(&lines);
     // let mut last_iter = Instant::now();
 
-    grid.print();
-    grid.update_tile_activation(); // fills out the active grid
-    grid.get_count_activated_cells()
+    base_grid.print();
+
+    let mut max_activations_seen = 0;
+
+    for width in 0..base_grid.activated_tiles.column_len() {
+        let mut grid = base_grid.clone();
+        grid.update_tile_activation(0, width as i64, Direction::South);
+        let counter = grid.get_count_activated_cells();
+        if counter > max_activations_seen {
+            max_activations_seen = counter;
+        }
+    }
+
+    for width in 0..base_grid.activated_tiles.column_len() {
+        let mut grid = base_grid.clone();
+        grid.update_tile_activation(
+            (base_grid.activated_tiles.row_len() - 1) as i64,
+            width as i64,
+            Direction::North,
+        );
+        let counter = grid.get_count_activated_cells();
+        if counter > max_activations_seen {
+            max_activations_seen = counter;
+        }
+    }
+
+    for row in 0..base_grid.activated_tiles.row_len() {
+        let mut grid = base_grid.clone();
+        grid.update_tile_activation(row as i64, 0 as i64, Direction::East);
+        let counter = grid.get_count_activated_cells();
+        if counter > max_activations_seen {
+            max_activations_seen = counter;
+        }
+    }
+    for row in 0..base_grid.activated_tiles.row_len() {
+        let mut grid = base_grid.clone();
+        grid.update_tile_activation(
+            row as i64,
+            (base_grid.activated_tiles.column_len() - 1) as i64,
+            Direction::West,
+        );
+        let counter = grid.get_count_activated_cells();
+        if counter > max_activations_seen {
+            max_activations_seen = counter;
+        }
+    }
+
+    max_activations_seen
 }
 
 fn main() {
