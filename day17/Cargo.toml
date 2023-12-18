@@ -1,0 +1,17 @@
+[package]
+name = "day17"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+array2d = "0.3.1"
+
+# RUSTFLAGS="-C target-cpu=native -C link-args=-Wl,-zstack-size=4194304"
+
+[profile.release]
+lto = "fat"
+debug = true
+# Build with RUSTFLAGS="-C target-cpu=native" for more speed
+opt-level = 3
